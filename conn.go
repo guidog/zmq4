@@ -64,7 +64,14 @@ func (c *Conn) Write(p []byte) (int, error) {
 // Open opens a ZMTP connection over rw with the given security, socket type and identity.
 // An optional onCloseErrorCB can be provided to inform the caller when this Conn is closed.
 // Open performs a complete ZMTP handshake.
-func Open(rw net.Conn, sec Security, sockType SocketType, sockID SocketIdentity, server bool, onCloseErrorCB func(c *Conn)) (*Conn, error) {
+func Open(
+	rw net.Conn,
+	sec Security,
+	sockType SocketType,
+	sockID SocketIdentity,
+	server bool,
+	onCloseErrorCB func(c *Conn),
+) (*Conn, error) {
 	if rw == nil {
 		return nil, fmt.Errorf("zmq4: invalid nil read-writer")
 	}
@@ -377,6 +384,9 @@ func (c *Conn) read() Msg {
 		isCmd   = false
 	)
 
+	// pre-allocate frames
+	msg.Frames = make([][]byte, 0, 10)
+
 	for hasMore {
 
 		// Read out the header
@@ -413,8 +423,9 @@ func (c *Conn) read() Msg {
 			return msg
 		}
 
-		body := make([]byte, size)
-		_, msg.err = io.ReadFull(c.rw, body)
+		// body := make([]byte, size)
+		body := allocator.alloc(int(size))
+		_, msg.err = io.ReadFull(c.rw, *body)
 		if msg.err != nil {
 			c.checkIO(msg.err)
 			return msg
@@ -423,14 +434,16 @@ func (c *Conn) read() Msg {
 		// fast path for NULL security: we bypass the bytes.Buffer allocation.
 		switch c.sec.Type() {
 		case NullSecurity: // FIXME(sbinet): also do that for non-encrypted PLAIN?
-			msg.Frames = append(msg.Frames, body)
+			msg.Frames = append(msg.Frames, *body)
 			continue
 		}
 
 		buf := new(bytes.Buffer)
-		if _, msg.err = c.sec.Decrypt(buf, body); msg.err != nil {
+		if _, msg.err = c.sec.Decrypt(buf, *body); msg.err != nil {
+			allocator.free(body)
 			return msg
 		}
+		allocator.free(body)
 		msg.Frames = append(msg.Frames, buf.Bytes())
 	}
 	if isCmd {

@@ -20,15 +20,21 @@ const (
 // Msg is a ZMTP message, possibly composed of multiple frames.
 type Msg struct {
 	Frames    [][]byte
+	err       error
 	Type      MsgType
 	multipart bool
-	err       error
 }
 
+// NewMsg creates a message and sets the content to frame.
+//
+// The underlying storage of frame is now shared with the message!
 func NewMsg(frame []byte) Msg {
 	return Msg{Frames: [][]byte{frame}}
 }
 
+// NewMsgFrom creates a message and sets the content to the given frames.
+//
+// The underlying storage of the frames is now shared with the message!
 func NewMsgFrom(frames ...[]byte) Msg {
 	return Msg{Frames: frames}
 }
@@ -70,6 +76,10 @@ func (msg Msg) size() int {
 	return n
 }
 
+func (msg Msg) Size() int {
+	return msg.size()
+}
+
 func (msg Msg) String() string {
 	buf := new(bytes.Buffer)
 	buf.WriteString("Msg{Frames:{")
@@ -90,6 +100,22 @@ func (msg Msg) Clone() Msg {
 		copy(o.Frames[i], frame)
 	}
 	return o
+}
+
+// The Reset method is used to clear a message.
+//
+// The messages Size() will be 0 afterwards and
+// len(Frames) will also be 0.
+// Reset does not touch the underlying storage. It just
+// sets the len of the slices to 0.
+func (m *Msg) Reset() {
+	for i := range m.Frames {
+		f := m.Frames[i]
+		allocator.free(&f)
+		m.Frames[i] = nil
+	}
+	fr := m.Frames[:0]
+	m.Frames = fr
 }
 
 // Cmd is a ZMTP Cmd as per:

@@ -168,7 +168,11 @@ func TestPubSub(t *testing.T) {
 
 						err = sub.SetOption(zmq4.OptionSubscribe, topics[isub])
 						if err != nil {
-							return fmt.Errorf("could not subscribe to topic %q: %w", topics[isub], err)
+							return fmt.Errorf(
+								"could not subscribe to topic %q: %w",
+								topics[isub],
+								err,
+							)
 						}
 
 						wg2.Done()
@@ -181,7 +185,13 @@ func TestPubSub(t *testing.T) {
 								return fmt.Errorf("could not recv message %v: %w", want, err)
 							}
 							if !reflect.DeepEqual(msg, want) {
-								return fmt.Errorf("sub[%d][msg=%d]: got = %v, want= %v", isub, imsg, msg, want)
+								return fmt.Errorf(
+									"sub[%d][msg=%d]: got = %v, want= %v",
+									isub,
+									imsg,
+									msg,
+									want,
+								)
 							}
 							nmsgs[isub]++
 						}
@@ -611,6 +621,7 @@ func TestPubOptionHWM(t *testing.T) {
 }
 
 func BenchmarkPubSub(b *testing.B) {
+	b.ReportAllocs()
 	topic := "msg"
 	msgs := make([][]byte, 10)
 	for i := range msgs {
@@ -681,6 +692,7 @@ func BenchmarkPubSub(b *testing.B) {
 			for _, frame := range msg.Frames {
 				siz += len(frame)
 			}
+			msg.Reset()
 		}
 
 		return err
